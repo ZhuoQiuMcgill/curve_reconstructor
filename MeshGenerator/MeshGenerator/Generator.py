@@ -24,33 +24,6 @@ class Curve:
         self.points = [head, tail]
         self.is_cyclic = False
 
-    def add_head(self, point):
-        self.points = [point] + self.points
-        self.head = point
-
-    def remove_head(self):
-        if len(self.points) <= 2:
-            return
-
-        self.points = self.points[1:]
-        self.head = self.points[0]
-
-    def add_tail(self, point):
-        self.points.append(point)
-        self.tail = point
-
-    def remove_tail(self):
-        if len(self.points) <= 2:
-            return
-
-        self.points = self.points[:-1]
-        self.tail = self.points[-1]
-
-    def is_endpoint(self, point):
-        if point == self.head or point == self.tail:
-            return True
-        return False
-
     def get_distance_mean(self):
         total = 0
         for i in range(len(self.points) - 1):
@@ -107,19 +80,33 @@ class Curve:
 
         return standard_deviation
 
-    def calculate_connectivity(self, end_point, point):
-        def e(x1, x2, xi):
-            h = (distance(x1, x2) + distance(x2, xi)) / 2
-            s = (abs(distance(x1, x2) - distance(x2, xi))) / 2 ** 0.5
-            hd = self.get_distance_mean()
-            od = self.get_distance_deviation()
-            if od == 0:
-                return hd * h / s
-            return hd * (h / s) * (1 + hd / od) ** (od / hd)
+    def calculate_connectivity(self, end_point, point, c):
+        # Special case: If the curve has only two points
+        if len(self.points) == 2:
+            a_bar = 180  # Preset average angle (or any other logic)
+            s = 1  # Preset standard deviation (or any other logic)
+            as_ = 180  # Preset candidate angle (or any other logic)
+        else:
+            # Calculate candidate angle (as)
+            as_ = interior_angle(self.points[-2], end_point, point) if end_point == self.tail else interior_angle(point,
+                                                                                                                  end_point,
+                                                                                                                  self.points[
+                                                                                                                      1])
+            # Calculate average angle (a_bar)
+            a_bar = self.get_angle_mean()
+            # Calculate standard deviation (s)
+            s = self.get_distance_deviation()
 
-        if end_point == self.head:
-            return e(self.points[1], self.head, point)
-        return e(self.points[-2], self.tail, point)
+        # Calculate the length of the candidate segment (ds)
+        ds = distance(end_point, point)
+
+        # Calculate mean distance (d_bar)
+        d_bar = self.get_distance_mean()
+
+        # Calculate E[p; Tp1] using the corrected formula
+        E_value = (c * ((as_ / a_bar - 1) ** 2) + ((1 - c) / 4) * ((ds / (d_bar + s)) ** 2) + 1) ** -1
+
+        return E_value
 
     def add_point(self, end_point, point):
         if end_point == self.head:
@@ -152,6 +139,33 @@ class Curve:
         if self.is_cyclic:
             edges.append((self.points[-1], self.points[0]))
         return edges
+
+    def add_head(self, point):
+        self.points = [point] + self.points
+        self.head = point
+
+    def remove_head(self):
+        if len(self.points) <= 2:
+            return
+
+        self.points = self.points[1:]
+        self.head = self.points[0]
+
+    def add_tail(self, point):
+        self.points.append(point)
+        self.tail = point
+
+    def remove_tail(self):
+        if len(self.points) <= 2:
+            return
+
+        self.points = self.points[:-1]
+        self.tail = self.points[-1]
+
+    def is_endpoint(self, point):
+        if point == self.head or point == self.tail:
+            return True
+        return False
 
 
 class Generator:
@@ -193,58 +207,80 @@ class Generator:
             self.degree[point] = 0
 
     def determining_connectivity(self):
-        sorted_de_edges = self.sorted_by_distance()
-        for edge in sorted_de_edges:
-            edge_length = distance(edge[0], edge[1])
-            # both points are free point
-            if self.marks[edge] == 0 and self.degree[edge[0]] == 0 and self.degree[edge[1]] == 0:
-                self.degree[edge[0]] += 1
-                self.degree[edge[1]] += 1
-                self.marks[edge] = 1
-                new_curve = Curve(edge[0], edge[1])
-                self.curves.append(new_curve)
-            else:
-                if self.degree[edge[0]] > 1 or self.degree[edge[1]] > 1:
-                    continue
+        sorted_de_edges = sorted(self.de_edges, key=lambda e: distance(e[0], e[1]))
 
-                ptr1, ptr2 = None, None
-                for cur in self.curves:
-                    if ptr1 is not None and ptr2 is not None:
+        def calculate_radius(point, constant=1.0):
+            # Find the shortest and second-shortest Delaunay edges connected to the given point
+            shortest_edge = None
+            second_shortest_edge = None
+
+            for edge in sorted_de_edges:
+                p1, p2 = edge
+                if p1 == point or p2 == point:
+                    if shortest_edge is None:
+                        shortest_edge = edge
+                    elif second_shortest_edge is None:
+                        second_shortest_edge = edge
                         break
-                    if cur.is_endpoint(edge[0]):
-                        ptr1 = cur
-                    if cur.is_endpoint(edge[1]):
-                        ptr2 = cur
 
-                # 首尾相连
-                if ptr1 == ptr2:
-                    if edge_length < max(ptr1.calculate_connectivity(edge[0], edge[1]),
-                                         ptr1.calculate_connectivity(edge[1], edge[0])):
-                        ptr1.is_cyclic = True
-                        self.degree[edge[0]] += 1
-                        self.degree[edge[1]] += 1
-                    continue
+            if shortest_edge is None or second_shortest_edge is None:
+                return None  # The point is not connected by at least two Delaunay edges
 
-                if ptr1 is None:
-                    if edge_length < ptr2.calculate_connectivity(edge[1], edge[0]):
-                        ptr2.add_point(edge[1], edge[0])
-                        self.degree[edge[0]] += 1
-                        self.degree[edge[1]] += 1
-                    continue
+            # Calculate the lengths of the shortest and second-shortest edges
+            shortest_length = distance(*shortest_edge)
+            second_shortest_length = distance(*second_shortest_edge)
 
-                if ptr2 is None:
-                    if edge_length < ptr1.calculate_connectivity(edge[0], edge[1]):
-                        ptr1.add_point(edge[0], edge[1])
-                        self.degree[edge[0]] += 1
-                        self.degree[edge[1]] += 1
-                    continue
+            # Calculate the radius
+            radius = (shortest_length + second_shortest_length) / 2 * constant
 
-                if edge_length < max(ptr1.calculate_connectivity(edge[0], edge[1]),
-                                     ptr2.calculate_connectivity(edge[1], edge[0])):
-                    ptr1.merge(edge[0], edge[1], ptr2)
-                    self.degree[edge[0]] += 1
-                    self.degree[edge[1]] += 1
-                    self.curves.remove(ptr2)
+            return radius
+
+        def point_to_point(q1, q2):
+            edges_to_q1 = [e for e in sorted_de_edges if q1 in e]
+            if len(edges_to_q1) < 2:
+                return False
+
+            q1qk1 = edges_to_q1[0]
+            q1qk2 = edges_to_q1[1]
+
+            r = 0.5 * (distance(q1, q1qk1[0] if q1qk1[1] == q1 else q1qk1[1]) +
+                       distance(q1, q1qk2[0] if q1qk2[1] == q1 else q1qk2[1]))
+
+            points_in_B = [p for p in self.points if distance(p, q1) <= r]
+
+            for qi in points_in_B:
+                for qj in points_in_B:
+                    for qt in points_in_B:
+                        if qi != qj and qi != qt and qj != qt and q2 not in [qi, qj, qt]:
+                            angle1 = interior_angle(qt, q1, qj)
+                            angle2 = interior_angle(qi, q1, q2)
+                            if angle1 < angle2:
+                                return
+            self.curves.append(Curve(q1, q2))
+
+        def point_curve(point, curve, c=1.0):
+            # Determine which endpoint is closer to the point
+            distance_to_head = distance(point, curve.head)
+            distance_to_tail = distance(point, curve.tail)
+
+            closer_endpoint = curve.head if distance_to_head < distance_to_tail else curve.tail
+
+            # Calculate the radius for the closer endpoint
+            radius = calculate_radius(closer_endpoint)
+
+            if radius is None:
+                return False  # Cannot calculate radius, hence cannot proceed
+
+            # Find points in the radius around the closer endpoint
+            points_in_radius = [p for p in curve.points if distance(p, closer_endpoint) <= radius]
+
+            # Calculate E values for the candidate point and other points in the radius
+            E_candidate = curve.calculate_connectivity(closer_endpoint, point, c)
+            E_values = [curve.calculate_connectivity(closer_endpoint, p, c) for p in points_in_radius]
+
+            # Check if the candidate point should be connected to the curve
+            if all(E_candidate >= E for E in E_values):
+                curve.add_point(closer_endpoint, point)
 
     def reconstruct(self):
         self.calculate_delaunay()
@@ -260,14 +296,6 @@ class Generator:
 
     def get_edges(self):
         return self.edges[:]
-
-    def sorted_by_distance(self):
-        sorted_list = []
-        for edge in self.de_edges:
-            sorted_list.append((distance(edge[0], edge[1]), edge))
-
-        sorted_list = sorted(sorted_list)
-        return [comp[1] for comp in sorted_list]
 
     def clear(self):
         self.points = []
