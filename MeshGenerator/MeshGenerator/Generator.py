@@ -1,8 +1,20 @@
+import math
 from scipy.spatial import Delaunay
 
 
 def distance(a, b):
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+
+def interior_angle(p1, p2, p3):
+    # 计算p1, p2, p3形成的内角，返回角度（单位：度）
+    vector1 = (p1[0] - p2[0], p1[1] - p2[1])
+    vector2 = (p3[0] - p2[0], p3[1] - p2[1])
+    dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
+    magnitude1 = math.sqrt(vector1[0] ** 2 + vector1[1] ** 2)
+    magnitude2 = math.sqrt(vector2[0] ** 2 + vector2[1] ** 2)
+    angle = math.acos(dot_product / (magnitude1 * magnitude2))
+    return math.degrees(angle)
 
 
 class Curve:
@@ -53,6 +65,47 @@ class Curve:
         for i in range(len(self.points) - 1):
             total += (distance(self.points[i], self.points[i + 1]) - avg) ** 2
         return (total / (len(self.points) - 2)) ** 0.5
+
+    def _calculate_angles(self):
+        angles = []
+        for i in range(1, len(self.points) - 1):
+            p1 = self.points[i - 1]
+            p2 = self.points[i]
+            p3 = self.points[i + 1]
+
+            vector1 = (p1[0] - p2[0], p1[1] - p2[1])
+            vector2 = (p3[0] - p2[0], p3[1] - p2[1])
+
+            dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
+            magnitude1 = math.sqrt(vector1[0] ** 2 + vector1[1] ** 2)
+            magnitude2 = math.sqrt(vector2[0] ** 2 + vector2[1] ** 2)
+
+            if magnitude1 * magnitude2 == 0:
+                return "Cannot calculate angle due to zero magnitude vector."
+
+            angle = math.acos(dot_product / (magnitude1 * magnitude2))
+            angle_degree = math.degrees(angle)
+            angles.append(angle_degree)
+
+        return angles
+
+    def get_angle_mean(self):
+        angles = self._calculate_angles()
+        if isinstance(angles, str):
+            return angles
+
+        return sum(angles) / len(angles)
+
+    def get_angle_deviation(self):
+        angles = self._calculate_angles()
+        if isinstance(angles, str):
+            return angles
+
+        mean_angle = self.get_angle_mean()
+        sum_of_squared_differences = sum((x - mean_angle) ** 2 for x in angles)
+        standard_deviation = math.sqrt(sum_of_squared_differences / len(angles))
+
+        return standard_deviation
 
     def calculate_connectivity(self, end_point, point):
         def e(x1, x2, xi):
