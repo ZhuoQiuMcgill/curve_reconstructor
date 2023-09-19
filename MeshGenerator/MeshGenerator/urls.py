@@ -23,6 +23,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('api/send_points/', views.receive_points, name='receive_points'),
     path('api/receive_data/', views.receive_data, name='receive_data'),
+    path('api/send_clustering_points', views.received_clustering_points, name='received_clustering_points')
 ]
 
 

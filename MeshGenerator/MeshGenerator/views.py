@@ -35,3 +35,16 @@ def receive_data(request):
         'points': [{'x': x, 'y': y} for x, y in points],
         'lines': [{'start': {'x': x1, 'y': y1}, 'end': {'x': x2, 'y': y2}} for (x1, y1), (x2, y2) in lines]
     })
+
+
+@csrf_exempt
+def received_clustering_points(request):
+    if request.method == 'POST':
+        data = json.loads(request.body.decode('utf-8'))
+        points = data.get('points', [])
+        all_points = []
+        for point in points:
+            all_points.append((point['x'], point['y']))
+        print("Points received!")
+        print(all_points)
+        return JsonResponse({"status": "success"})
