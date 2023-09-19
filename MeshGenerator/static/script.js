@@ -3,7 +3,6 @@ let ctx = input_canvas.getContext("2d");
 let output_canvas = document.getElementById("output_canvas");
 let ctx2 = output_canvas.getContext("2d");
 
-
 let points = [];
 let isDrawing = false;
 
@@ -26,8 +25,10 @@ function updateButtonColor() {
 }
 
 input_canvas.addEventListener("mousedown", function(e) {
-    let x = e.clientX - input_canvas.offsetLeft;
-    let y = e.clientY - input_canvas.offsetTop;
+    let rect = input_canvas.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+
 
     if (e.button === 2) {
         points.pop(); // 右键撤销
