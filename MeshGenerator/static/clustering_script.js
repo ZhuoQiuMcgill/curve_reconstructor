@@ -4,7 +4,8 @@ let isCalculating = false;
 let zoomLevel = 1;
 let offsetX = 0;
 let offsetY = 0;
-
+let isBrushMode = false;  // 刷子模式标志
+let brushRadius = 40;  // 刷子的半径
 
 // Get the canvas and context for featureB
 const canvasB = document.getElementById('featureB_canvas');
@@ -14,15 +15,20 @@ const ctxB = canvasB.getContext('2d');
 
 /** 画布功能 */
 let pointRadius = 4;
-
 let selectedPoint = null;  // 用于跟踪当前选中的点
 
-// Function to redraw all points and the selected circle on featureB canvas
 function redrawAllB() {
   clearCanvasB();
   ctxB.save();  // 保存当前的绘图状态
-  ctxB.translate(offsetX, offsetY);  // 应用平移
-  ctxB.scale(zoomLevel, zoomLevel);  // 应用缩放
+
+  // 先移动到画布中心，然后进行缩放，最后再移动回去
+  ctxB.translate(canvasB.width / 2, canvasB.height / 2);
+  ctxB.scale(zoomLevel, zoomLevel);
+  ctxB.translate(-canvasB.width / 2, -canvasB.height / 2);
+
+  // 应用平移
+  ctxB.translate(offsetX, offsetY);
+
   pointsB.forEach(point => drawPointB(point.x, point.y));
   if (selectedPoint) {
     drawSelectedPointB(selectedPoint.x, selectedPoint.y);
@@ -30,11 +36,30 @@ function redrawAllB() {
   ctxB.restore();  // 恢复之前保存的绘图状态
 }
 
+function convertMouseToCanvasCoords(event, canvasElement, offsetX, offsetY, zoomLevel) {
+    const rect = canvasElement.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // 先移动到画布中心，然后进行缩放，最后再移动回去
+    const scaledX = (x - canvasElement.width / 2) / zoomLevel + canvasElement.width / 2;
+    const scaledY = (y - canvasElement.height / 2) / zoomLevel + canvasElement.height / 2;
+
+    // 应用平移
+    const finalX = scaledX - offsetX;
+    const finalY = scaledY - offsetY;
+
+    return { x: finalX, y: finalY };
+}
+
+
+
+
 
 function drawPointB(x, y) {
   ctxB.fillStyle = 'black';
   ctxB.beginPath();
-  ctxB.arc(x, y, pointRadius * zoomLevel, 0, Math.PI * 2);
+  ctxB.arc(x, y, pointRadius, 0, Math.PI * 2);
   ctxB.fill();
 }
 
@@ -42,9 +67,11 @@ function drawSelectedPointB(x, y, radius = pointRadius * 2) {
   ctxB.strokeStyle = 'blue';
   ctxB.lineWidth = 1;
   ctxB.beginPath();
-  ctxB.arc(x, y, radius * zoomLevel, 0, Math.PI * 2);
+  ctxB.arc(x, y, radius, 0, Math.PI * 2);
   ctxB.stroke();
 }
+
+
 
 // Function to clear the featureB canvas
 function clearCanvasB() {
@@ -62,48 +89,131 @@ function isClicked(point1, point2, radius = pointRadius * 2) {
     return distance <= radius;
 }
 
-canvasB.addEventListener('mousedown', function(event) {
-    const rect = canvasB.getBoundingClientRect();
-    const x = (event.clientX - rect.left - offsetX) / zoomLevel;
-    const y = (event.clientY - rect.top - offsetY) / zoomLevel;
-    const clickedPoint = { x, y };
+function updateTotalPoints() {
+    document.getElementById('pointInfoB').innerHTML = 'Total points: ' + pointsB.length;
+}
 
-    // Check if the click is on an existing point
+
+
+let isMouseDown = false;  // 用于跟踪鼠标是否被按下
+let currentMousePos = { x: 0, y: 0 };  // 用于存储当前鼠标位置
+// 当鼠标按下时
+canvasB.addEventListener('mousedown', function(event) {
+    const { x, y } = convertMouseToCanvasCoords(event, canvasB, offsetX, offsetY, zoomLevel);
+    const clickedPoint = { x, y };
+    isMouseDown = true;  // 设置鼠标按下标志
+
+    // 检查该位置是否已有点
     const existingPoint = pointsB.find(point => isClicked(point, clickedPoint));
 
     if (existingPoint) {
         if (isCalculating) {
             // Update the infoBoxB with the coordinates of the clicked point
-            document.getElementById('pointInfoB').innerHTML = `Point coordinates:<br> x = ${existingPoint.x.toFixed(2)},<br> y = ${existingPoint.y.toFixed(2)}`;
-
+            document.getElementById('pointInfoB').innerHTML =
+                `Total points: ${pointsB.length}<br> Point coordinates:<br> x = ${existingPoint.x.toFixed(2)}<br> y = ${existingPoint.y.toFixed(2)}`;
             // Update the selected point
             selectedPoint = existingPoint;
         }
     } else {
         if (!isCalculating) {
-            if (event.button === 0) { // Left click
+            if (event.button === 0) {  // Left click
                 pointsB.push({ x, y });
-            } else if (event.button === 2) { // Right click
+            } else if (event.button === 2) {  // Right click
                 pointsB.pop();
             }
+            updateTotalPoints();
         }
         // 如果点击的是空白区域，则取消选中的点
         selectedPoint = null;
     }
+
     // Redraw all points and the selected circle
     redrawAllB();
 });
 
+// 当鼠标移动时
+canvasB.addEventListener('mousemove', function(event) {
+    const { x, y } = convertMouseToCanvasCoords(event, canvasB, offsetX, offsetY, zoomLevel);
+    currentMousePos.x = x;
+    currentMousePos.y = y;
+
+    if (isMouseDown && isBrushMode && !isCalculating) {
+        addBrushPoints(x, y);
+        updateTotalPoints();
+        redrawAllB();
+    }
+});
+
+// 当鼠标释放时
+canvasB.addEventListener('mouseup', function(event) {
+    isMouseDown = false;  // 清除鼠标按下标志
+});
 
 
 
 
-// Prevent the context menu on right click on featureB canvas
+
+
+/** 刷子功能 */
 canvasB.addEventListener('contextmenu', function(event) {
   event.preventDefault();
 });
 
+function addBrushPoints(centerX, centerY, numPoints = 10) {
+    for (let i = 0; i < numPoints; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.sqrt(Math.random()) * brushRadius;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        const newPoint = { x, y };
 
+        // 检查新点是否与现有点太接近
+        const isTooClose = pointsB.some(point => isClicked(point, newPoint, pointRadius * 2));
+
+        if (!isTooClose) {
+            pointsB.push(newPoint);
+        }
+    }
+}
+
+// 在刷子模式下，鼠标悬浮时绘制一个圆
+canvasB.addEventListener('mousemove', function(event) {
+  if (isBrushMode && !isCalculating) {
+    const rect = canvasB.getBoundingClientRect();
+    const x = (event.clientX - rect.left - offsetX) / zoomLevel;
+    const y = (event.clientY - rect.top - offsetY) / zoomLevel;
+    redrawAllB();  // 重新绘制所有点
+
+    // 保存当前的绘图状态
+    ctxB.save();
+    // 应用平移和缩放
+    ctxB.translate(offsetX, offsetY);
+    ctxB.scale(zoomLevel, zoomLevel);
+
+    // 绘制悬浮显示的圆
+    ctxB.beginPath();
+    ctxB.arc(x, y, brushRadius, 0, Math.PI * 2);
+    ctxB.strokeStyle = 'black';
+    ctxB.stroke();
+
+    // 恢复之前保存的绘图状态
+    ctxB.restore();
+  }
+});
+
+
+// 切换刷子模式
+document.getElementById('brushToggle').addEventListener('click', function() {
+  isBrushMode = !isBrushMode;
+  console.log("current button state: " + isBrushMode);
+  updateButtonColorB();
+  redrawAllB();
+});
+
+function updateButtonColorB() {
+    const btnToggle = document.getElementById("brushToggle");
+    btnToggle.style.backgroundColor = isBrushMode ? "green" : "red"; // 根据状态改变按钮颜色
+}
 
 
 /** 缩放功能 */
@@ -157,6 +267,7 @@ document.getElementById('calculateB').addEventListener('click', function() {
         return;
     }
     isCalculating = true;
+    redrawAllB();
   // Send the points to the backend
   fetch('/api/send_clustering_points', {
     method: 'POST',

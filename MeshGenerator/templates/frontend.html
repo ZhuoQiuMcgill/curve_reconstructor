@@ -17,7 +17,7 @@
         }
         .container {
             position: relative;
-            max-width: 850px;
+            max-width: 900px;
             margin: auto;
             padding: 20px;
             display: flex;
@@ -77,7 +77,7 @@
         }
     </style>
 </head>
-<body onload="updateButtonColor();">
+<body onload="updateButtonColorB();">
     <div class="container">
         <div class="button-container">
             <button id="showFeatureA">VICUR</button>
@@ -96,8 +96,9 @@
         </div>
         <div id="featureB" class="feature hidden">
             <div class="canvas-container">
-                <canvas id="featureB_canvas" width="600" height="600" style="vertical-align: top; margin-top: 0px;"></canvas>
-                <div id="infoBoxB" style="width: 200px; height: 600px; border: 3px solid #ccc; overflow-y: auto; vertical-align: top; margin-top: 0px;">
+                <button id="brushToggle">B</button>
+                <canvas id="featureB_canvas" width="500" height="500" style="vertical-align: top; margin-top: 0px;"></canvas>
+                <div id="infoBoxB" style="width: 200px; height: 500px; border: 3px solid #ccc; overflow-y: auto; vertical-align: top; margin-top: 0px;">
                     <p id="pointInfoB">Click on a point to see details here.</p>
                 </div>
             </div>
@@ -114,7 +115,6 @@
         <div class="background-layer"></div>
     </div>
 
-    <script src="{% static 'script.js' %}"></script>
     <script src="{% static 'clustering_script.js' %}"></script>
     <script>
         // JavaScript for toggling between features

@@ -49,3 +49,7 @@ def received_clustering_points(request):
         print(all_points)
         return JsonResponse({"status": "success"})
 
+
+@csrf_exempt
+def receive_data_from_clustering(request):
+    pass
