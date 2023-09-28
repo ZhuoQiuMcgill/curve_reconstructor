@@ -48,3 +48,4 @@ def received_clustering_points(request):
         print("Points received!")
         print(all_points)
         return JsonResponse({"status": "success"})
+

@@ -1,6 +1,10 @@
 // Initialize an array to store the points for featureB
 let pointsB = [];
 let isCalculating = false;
+let zoomLevel = 1;
+let offsetX = 0;
+let offsetY = 0;
+
 
 // Get the canvas and context for featureB
 const canvasB = document.getElementById('featureB_canvas');
@@ -16,18 +20,30 @@ let selectedPoint = null;  // 用于跟踪当前选中的点
 // Function to redraw all points and the selected circle on featureB canvas
 function redrawAllB() {
   clearCanvasB();
+  ctxB.save();  // 保存当前的绘图状态
+  ctxB.translate(offsetX, offsetY);  // 应用平移
+  ctxB.scale(zoomLevel, zoomLevel);  // 应用缩放
   pointsB.forEach(point => drawPointB(point.x, point.y));
   if (selectedPoint) {
     drawSelectedPointB(selectedPoint.x, selectedPoint.y);
   }
+  ctxB.restore();  // 恢复之前保存的绘图状态
 }
 
-// Function to draw a point on featureB canvas
+
 function drawPointB(x, y) {
   ctxB.fillStyle = 'black';
   ctxB.beginPath();
-  ctxB.arc(x, y, pointRadius, 0, Math.PI * 2);
+  ctxB.arc(x, y, pointRadius * zoomLevel, 0, Math.PI * 2);
   ctxB.fill();
+}
+
+function drawSelectedPointB(x, y, radius = pointRadius * 2) {
+  ctxB.strokeStyle = 'blue';
+  ctxB.lineWidth = 1;
+  ctxB.beginPath();
+  ctxB.arc(x, y, radius * zoomLevel, 0, Math.PI * 2);
+  ctxB.stroke();
 }
 
 // Function to clear the featureB canvas
@@ -46,43 +62,40 @@ function isClicked(point1, point2, radius = pointRadius * 2) {
     return distance <= radius;
 }
 
-function drawSelectedPointB(x, y, radius = pointRadius * 2) {  // 半径是点的半径的两倍
-  ctxB.strokeStyle = 'blue';  // 蓝色
-  ctxB.lineWidth = 1;
-  ctxB.beginPath();
-  ctxB.arc(x, y, radius, 0, Math.PI * 2);
-  ctxB.stroke();
-}
-
-// Add event listener for mouse clicks on featureB canvas
 canvasB.addEventListener('mousedown', function(event) {
     const rect = canvasB.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const x = (event.clientX - rect.left - offsetX) / zoomLevel;
+    const y = (event.clientY - rect.top - offsetY) / zoomLevel;
     const clickedPoint = { x, y };
 
     // Check if the click is on an existing point
     const existingPoint = pointsB.find(point => isClicked(point, clickedPoint));
+
     if (existingPoint) {
         if (isCalculating) {
             // Update the infoBoxB with the coordinates of the clicked point
-            document.getElementById('pointInfoB').textContent = `Point coordinates: x = ${existingPoint.x}, y = ${existingPoint.y}`;
+            document.getElementById('pointInfoB').innerHTML = `Point coordinates:<br> x = ${existingPoint.x.toFixed(2)},<br> y = ${existingPoint.y.toFixed(2)}`;
+
             // Update the selected point
             selectedPoint = existingPoint;
         }
-    } else if (!isCalculating) {
-        if (event.button === 0) { // Left click
-            pointsB.push({ x, y });
-            selectedPoint = null;  // Deselect the point when clicking on empty space
-
-        } else if (event.button === 2) { // Right click
-            pointsB.pop();
-            selectedPoint = null;  // Deselect the point when removing a point
+    } else {
+        if (!isCalculating) {
+            if (event.button === 0) { // Left click
+                pointsB.push({ x, y });
+            } else if (event.button === 2) { // Right click
+                pointsB.pop();
+            }
         }
+        // 如果点击的是空白区域，则取消选中的点
+        selectedPoint = null;
     }
     // Redraw all points and the selected circle
     redrawAllB();
 });
+
+
+
 
 
 // Prevent the context menu on right click on featureB canvas
@@ -93,10 +106,56 @@ canvasB.addEventListener('contextmenu', function(event) {
 
 
 
+/** 缩放功能 */
+canvasB.addEventListener('wheel', function(event) {
+  event.preventDefault();
+
+  // 更新缩放级别
+  if (event.deltaY < 0) {
+    zoomLevel *= 1.1;
+  } else {
+    zoomLevel /= 1.1;
+  }
+
+  // 重新绘制所有内容
+  redrawAllB();
+});
+
+
+/** 镜头移动功能 */
+document.addEventListener('keydown', function(event) {
+    const step = 20;  // 移动步长，您可以根据需要调整这个值
+
+    switch (event.key.toLowerCase()) {
+        case 'w':
+            offsetY += step;
+            break;
+        case 'a':
+            offsetX += step;
+            break;
+        case 's':
+            offsetY -= step;
+            break;
+        case 'd':
+            offsetX -= step;
+            break;
+        default:
+            return;  // 如果按下的不是 WASD，不执行任何操作
+    }
+
+    redrawAllB();  // 重新绘制画布以应用新的偏移量
+});
+
+
+
+
 
 /** calculate 按钮功能 */
 // Add event listener for the Calculate button
 document.getElementById('calculateB').addEventListener('click', function() {
+    if (pointsB.length === 0) {
+        return;
+    }
     isCalculating = true;
   // Send the points to the backend
   fetch('/api/send_clustering_points', {
@@ -119,11 +178,11 @@ document.getElementById('calculateB').addEventListener('click', function() {
 
 
 /** clear 按钮功能 */
-// Add event listener for the Clear button
 document.getElementById('clearB').addEventListener('click', function() {
-    isCalculating = false;  // 重置isCalculating变量
+    isCalculating = false;  // 重置 isCalculating 变量
     pointsB = [];  // 清空点数组
     selectedPoint = null;  // 清空选中的点
+    zoomLevel = 1;  // 重置 zoomLevel 为 1（无缩放）
     redrawAllB();  // 重新绘制画布
 });
 
